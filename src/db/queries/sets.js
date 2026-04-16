@@ -30,3 +30,36 @@ export async function searchByName(name) {
   );
   return rows;
 }
+
+/**
+ * Search by name locally, falling back to Rebrickable if the local catalogue
+ * has no matches and REBRICKABLE_API_KEY is configured.
+ * Results from Rebrickable are saved to the local catalogue for future queries.
+ */
+export async function searchByNameWithFallback(name) {
+  const local = await searchByName(name);
+  if (local.length > 0) return local;
+
+  // Fallback to Rebrickable
+  try {
+    const { listSets } = await import('../../sources/rebrickable.js');
+    const data = await listSets({ search: name, page_size: '20' });
+
+    const saved = [];
+    for (const s of data.results || []) {
+      const row = await upsertSet({
+        setNumber: s.set_num.replace(/-1$/, ''),
+        name: s.name,
+        year: s.year,
+        pieceCount: s.num_parts,
+        imageUrl: s.set_img_url || null,
+      });
+      saved.push(row);
+    }
+
+    return saved;
+  } catch {
+    // Rebrickable unavailable — return empty
+    return [];
+  }
+}

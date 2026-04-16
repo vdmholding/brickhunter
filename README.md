@@ -55,7 +55,7 @@ All configuration is via environment variables (`.env` file). Copy `.env.example
 | `LLM_API_KEY` | No | API key for the chosen LLM provider |
 | `LLM_MODEL` | No | Model override (defaults to `claude-sonnet-4-20250514` or `gpt-4o`) |
 
-Each source is optional. BrickHunter searches whichever sources have credentials configured and skips the rest. LEGO.com and BrickEconomy work without API keys (they scrape public product pages).
+Each source is optional. BrickHunter searches whichever sources have credentials configured and skips the rest. LEGO.com and BrickEconomy work without API keys (they use Puppeteer to scrape rendered product pages).
 
 ## Seeding the catalogue
 
@@ -105,8 +105,34 @@ Response includes the set metadata, all listings sorted by price, the best deal,
 |--------|------|-------------|
 | `GET` | `/health` | Health check |
 | `GET` | `/api/search/history` | Recent searches |
+| `GET` | `/api/sets?q=millennium+falcon` | Search sets by name (falls back to Rebrickable) |
 | `GET` | `/api/sets/:setNumber` | Get a set from the catalogue |
 | `GET` | `/api/sets/:setNumber/listings` | Get stored listings for a set |
+
+### Price monitors
+
+Set up a watch on a set and get alerted when the price drops below your target:
+
+```bash
+# Create a monitor
+curl -X POST http://localhost:3000/api/monitors \
+  -H 'Content-Type: application/json' \
+  -d '{"setNumber": "75192", "targetPrice": 500, "condition": "new"}'
+
+# List monitors
+curl http://localhost:3000/api/monitors
+
+# Manually trigger a check
+curl -X POST http://localhost:3000/api/monitors/1/check
+
+# View recent alerts
+curl http://localhost:3000/api/monitors/alerts/recent
+
+# Deactivate a monitor
+curl -X DELETE http://localhost:3000/api/monitors/1
+```
+
+The monitor scheduler runs automatically when the server starts, checking all active monitors every 30 minutes.
 
 ## MCP server
 
@@ -171,14 +197,18 @@ Populated via Rebrickable seed or on-demand enrichment.
 
 **searches** — Log of every search query with the resolved set number, result count, best price, and best source.
 
+**monitors** — Price watch list. Each monitor tracks a set number, target price, and optional condition/source filters. The scheduler checks all active monitors periodically.
+
+**alerts** — Triggered when a monitor's target price is met. Stores the price, source, and listing URL.
+
 ## Price sources
 
 | Source | Method | Auth required | Notes |
 |--------|--------|---------------|-------|
 | eBay | Browse API | Yes (OAuth2 client credentials) | Real-time auction and Buy It Now listings |
 | BrickLink | REST API | Yes (OAuth 1.0a) | Price guide data from the largest Lego marketplace |
-| LEGO.com | HTML scrape | No | Official retail price and availability |
-| BrickEconomy | HTML scrape | No | Market value tracking, new and used prices |
+| LEGO.com | Puppeteer scrape | No | Official retail price and availability |
+| BrickEconomy | Puppeteer scrape | No | Market value tracking, new and used prices |
 | Rebrickable | REST API | Yes (API key) | Catalogue only — set metadata, not prices |
 
 ## Project structure
@@ -192,6 +222,7 @@ src/
   agent/
     index.js            hunt() orchestrator
     llm.js              Provider-agnostic LLM client (Anthropic / OpenAI)
+    monitor.js          Price monitor scheduler and checker
 
   sources/
     index.js            searchAll() — concurrent multi-source aggregator
@@ -213,19 +244,31 @@ src/
     routes/
       search.js         Search endpoints
       sets.js           Set and listing endpoints
+      monitors.js       Monitor and alert endpoints
 
   utils/
     logger.js           pino logger (writes to stderr)
+    browser.js          Shared Puppeteer instance for scrapers
+
+test/                   Unit tests (Node.js test runner)
 ```
 
 ## Deployment
 
 Designed for **AWS** with **Cloudflare** in front. The Express API is a standard Node.js HTTP server — deploy behind an ALB, on ECS, Lambda, or EC2. PostgreSQL on RDS.
 
+## Testing
+
+```bash
+npm test
+```
+
+Uses Node.js built-in test runner. Tests cover database queries (sets, listings, monitors), the API layer, and source aggregation logic. Requires a running PostgreSQL instance with the `DATABASE_URL` configured.
+
 ## Roadmap
 
 - **Amex ACE integration** — use the American Express Agentic Commerce Experiences Developer Kit to let the agent purchase sets on behalf of users with tokenized Amex credentials and purchase protection
-- **Price monitoring** — scheduled re-scans with alerts when a set drops below a target price
+- **Alert delivery** — email, webhook, or push notification when a price target is hit
 - **Frontend UI** — browse, search, and track sets visually
 
 ## License

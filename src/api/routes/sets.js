@@ -5,6 +5,21 @@ import * as listingsDb from '../../db/queries/listings.js';
 const router = Router();
 
 /**
+ * GET /api/sets?q=galaxy+explorer
+ * Search sets by name (falls back to Rebrickable if local DB has no matches).
+ */
+router.get('/', async (req, res, next) => {
+  try {
+    const q = req.query.q;
+    if (!q) return res.status(400).json({ error: 'Missing "q" query parameter' });
+    const sets = await setsDb.searchByNameWithFallback(q);
+    res.json({ sets });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * GET /api/sets/:setNumber
  */
 router.get('/:setNumber', async (req, res, next) => {

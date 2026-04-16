@@ -1,6 +1,7 @@
 import express from 'express';
 import searchRoutes from './routes/search.js';
 import setsRoutes from './routes/sets.js';
+import monitorRoutes from './routes/monitors.js';
 import logger from '../utils/logger.js';
 
 const app = express();
@@ -17,6 +18,7 @@ app.use((req, res, next) => {
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.use('/api/search', searchRoutes);
 app.use('/api/sets', setsRoutes);
+app.use('/api/monitors', monitorRoutes);
 
 // Error handler
 app.use((err, req, res, _next) => {

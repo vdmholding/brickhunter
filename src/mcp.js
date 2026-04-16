@@ -88,14 +88,14 @@ server.registerTool(
   'search_sets',
   {
     description:
-      'Search the local Lego set catalogue by name. ' +
-      'Returns up to 20 matching sets. Requires the catalogue to be seeded first (npm run seed).',
+      'Search for Lego sets by name. ' +
+      'Searches the local catalogue first, then falls back to Rebrickable if no local matches.',
     inputSchema: {
       name: z.string().describe('Search term to match against set names'),
     },
   },
   async ({ name }) => {
-    const sets = await setsDb.searchByName(name);
+    const sets = await setsDb.searchByNameWithFallback(name);
 
     return {
       content: [
