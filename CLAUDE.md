@@ -27,9 +27,11 @@ src/
     bricklink.js        — BrickLink API (OAuth 1.0a)
     lego.js             — LEGO.com scraper
     brickeconomy.js     — BrickEconomy scraper
+    rebrickable.js      — Rebrickable catalogue API
   agent/
     index.js            — hunt() orchestrator
     llm.js              — provider-agnostic LLM client (anthropic/openai)
+  mcp.js                — MCP server entry point (stdio transport)
   api/
     index.js            — Express app setup
     routes/
@@ -44,6 +46,8 @@ src/
 - `npm run dev` — start dev server with watch mode
 - `npm start` — start production server
 - `npm run migrate` — run database migrations
+- `npm run seed` — seed set catalogue from Rebrickable
+- `npm run mcp` — start MCP server (stdio transport)
 
 ## API endpoints
 
@@ -56,6 +60,30 @@ src/
 ## Environment
 
 Copy `.env.example` to `.env` and fill in credentials. The LLM layer is optional — the search works without it but won't resolve natural-language queries or generate summaries.
+
+## MCP server
+
+Exposes BrickHunter as an MCP server over stdio. Tools:
+
+- `hunt` — search all sources for a set (by number or name)
+- `get_set` — look up a set in the local catalogue
+- `search_sets` — search catalogue by name
+- `get_listings` — get stored price listings for a set
+- `compare_prices` — per-source price comparison
+- `search_history` — recent search log
+
+Claude Desktop config example:
+```json
+{
+  "mcpServers": {
+    "brickhunter": {
+      "command": "node",
+      "args": ["src/mcp.js"],
+      "cwd": "/path/to/brickhunter"
+    }
+  }
+}
+```
 
 ## Future
 
