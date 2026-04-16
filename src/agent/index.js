@@ -1,4 +1,5 @@
 import { searchAll } from '../sources/index.js';
+import { getSet as getRebrickableSet } from '../sources/rebrickable.js';
 import { extractSetNumber, chat } from './llm.js';
 import * as setsDb from '../db/queries/sets.js';
 import * as listingsDb from '../db/queries/listings.js';
@@ -32,10 +33,21 @@ export async function hunt(query, opts = {}) {
   // 2. Search all sources concurrently
   const listings = await searchAll(setNumber, opts);
 
-  // 3. Upsert set if we got results
+  // 3. Upsert set — enrich from Rebrickable if available
   let set = await setsDb.findBySetNumber(setNumber);
-  if (!set && listings.length > 0) {
-    set = await setsDb.upsertSet({ setNumber, name: query });
+  if (!set) {
+    const rb = await getRebrickableSet(setNumber).catch(() => null);
+    if (rb) {
+      set = await setsDb.upsertSet({
+        setNumber,
+        name: rb.name,
+        year: rb.year,
+        pieceCount: rb.num_parts,
+        imageUrl: rb.set_img_url || null,
+      });
+    } else if (listings.length > 0) {
+      set = await setsDb.upsertSet({ setNumber, name: query });
+    }
   }
 
   // 4. Store listings in DB

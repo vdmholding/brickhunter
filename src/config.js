@@ -21,6 +21,10 @@ export default {
     tokenSecret: process.env.BRICKLINK_TOKEN_SECRET,
   },
 
+  rebrickable: {
+    apiKey: process.env.REBRICKABLE_API_KEY,
+  },
+
   llm: {
     provider: process.env.LLM_PROVIDER,
     apiKey: process.env.LLM_API_KEY,
