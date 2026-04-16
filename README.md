@@ -26,9 +26,13 @@ git clone https://github.com/vdmholding/brickhunter.git
 cd brickhunter
 npm install
 
+# Create the database and user (requires sudo/postgres access)
+./scripts/setup-db.sh
+
 # Configure
 cp .env.example .env
 # Edit .env — at minimum set DATABASE_URL
+# The setup script prints the connection string for you
 
 # Create tables
 npm run migrate
