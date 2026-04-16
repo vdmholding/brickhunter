@@ -1,0 +1,26 @@
+{
+  "name": "brickhunter",
+  "version": "0.1.0",
+  "description": "Lego set price search and comparison agent across eBay, BrickLink, LEGO.com, and BrickEconomy",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "migrate": "node src/db/migrate.js",
+    "seed": "node src/db/seed.js"
+  },
+  "keywords": ["lego", "bricklink", "ebay", "price-comparison", "agent"],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "pg": "^8.13.0",
+    "dotenv": "^16.4.0",
+    "pino": "^9.5.0",
+    "pino-pretty": "^13.0.0"
+  },
+  "devDependencies": {}
+}
