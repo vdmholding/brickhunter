@@ -79,12 +79,18 @@ Copy `.env.example` to `.env` and fill in credentials. The LLM layer is optional
 
 Exposes BrickHunter as an MCP server over stdio. Tools:
 
+- `version` — server version and git commit
 - `hunt` — search all sources for a set (by number or name)
 - `get_set` — look up a set in the local catalogue
 - `search_sets` — search catalogue by name
 - `get_listings` — get stored price listings for a set
 - `compare_prices` — per-source price comparison
 - `search_history` — recent search log
+- `create_monitor` — set up a price watch with target price
+- `list_monitors` — list all monitors
+- `check_monitor` — manually trigger a price check
+- `delete_monitor` — deactivate a monitor
+- `get_alerts` — view triggered price alerts
 
 Claude Desktop config example:
 ```json

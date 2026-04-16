@@ -146,12 +146,18 @@ BrickHunter also runs as an [MCP](https://modelcontextprotocol.io/) server, so a
 
 | Tool | Description |
 |------|-------------|
+| `version` | Server version and git commit hash |
 | `hunt` | Search all sources for a set by number or name. Returns listings, best deal, and summary. |
 | `get_set` | Look up a set in the local catalogue |
-| `search_sets` | Search the catalogue by name |
+| `search_sets` | Search the catalogue by name (Rebrickable fallback) |
 | `get_listings` | Get stored price listings from previous searches |
 | `compare_prices` | Live per-source price comparison — best price from each source side by side |
 | `search_history` | View recent search log |
+| `create_monitor` | Set up a price watch with a target price |
+| `list_monitors` | List all price monitors and their status |
+| `check_monitor` | Manually trigger a price check for a monitor |
+| `delete_monitor` | Deactivate a price monitor |
+| `get_alerts` | View triggered price alerts (all or per monitor) |
 
 ### Claude Desktop
 

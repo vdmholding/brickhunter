@@ -1,20 +1,56 @@
 import 'dotenv/config';
+import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { hunt } from './agent/index.js';
 import { searchAll } from './sources/index.js';
+import { checkMonitor } from './agent/monitor.js';
 import * as setsDb from './db/queries/sets.js';
 import * as listingsDb from './db/queries/listings.js';
 import * as searchesDb from './db/queries/searches.js';
+import * as monitorsDb from './db/queries/monitors.js';
 import logger from './utils/logger.js';
+
+// --- Version info ---
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
+
+function getGitCommit() {
+  try {
+    return execSync('git rev-parse --short HEAD', { cwd: join(__dirname, '..'), encoding: 'utf8' }).trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
+const VERSION = pkg.version;
+const COMMIT = getGitCommit();
 
 const server = new McpServer({
   name: 'brickhunter',
-  version: '0.1.0',
+  version: VERSION,
 });
 
 // --- Tools ---
+
+server.registerTool(
+  'version',
+  {
+    description: 'Show BrickHunter server version and git commit.',
+    inputSchema: {},
+  },
+  async () => ({
+    content: [{
+      type: 'text',
+      text: JSON.stringify({ name: 'brickhunter', version: VERSION, commit: COMMIT }, null, 2),
+    }],
+  })
+);
 
 server.registerTool(
   'hunt',
@@ -225,12 +261,149 @@ server.registerTool(
   }
 );
 
+// --- Monitor tools ---
+
+server.registerTool(
+  'create_monitor',
+  {
+    description:
+      'Create a price monitor to watch a Lego set. ' +
+      'When the price drops below the target, an alert is recorded. ' +
+      'Monitors are checked automatically every 30 minutes when the server runs.',
+    inputSchema: {
+      set_number: z.string().describe('Lego set number to monitor, e.g. "75192"'),
+      target_price: z.number().positive().describe('Alert when total price (price + shipping) drops below this'),
+      condition: z
+        .enum(['new', 'used'])
+        .optional()
+        .describe('Only monitor listings in this condition'),
+      sources: z
+        .array(z.enum(['ebay', 'bricklink', 'lego', 'brickeconomy']))
+        .optional()
+        .describe('Limit monitoring to specific sources'),
+    },
+  },
+  async ({ set_number, target_price, condition, sources }) => {
+    const monitor = await monitorsDb.create({
+      setNumber: set_number,
+      targetPrice: target_price,
+      condition,
+      sources,
+    });
+
+    return {
+      content: [{ type: 'text', text: JSON.stringify(monitor, null, 2) }],
+    };
+  }
+);
+
+server.registerTool(
+  'list_monitors',
+  {
+    description: 'List all price monitors. Shows active and inactive monitors with their last check results.',
+    inputSchema: {
+      active_only: z.boolean().optional().describe('Only show active monitors (default: false)'),
+    },
+  },
+  async ({ active_only }) => {
+    const monitors = active_only ? await monitorsDb.listActive() : await monitorsDb.listAll();
+
+    return {
+      content: [{
+        type: 'text',
+        text: monitors.length
+          ? JSON.stringify(monitors, null, 2)
+          : 'No monitors configured.',
+      }],
+    };
+  }
+);
+
+server.registerTool(
+  'check_monitor',
+  {
+    description: 'Manually trigger a price check for a specific monitor. Returns the current best price and whether an alert was triggered.',
+    inputSchema: {
+      monitor_id: z.number().int().positive().describe('ID of the monitor to check'),
+    },
+  },
+  async ({ monitor_id }) => {
+    const monitor = await monitorsDb.findById(monitor_id);
+    if (!monitor) {
+      return {
+        content: [{ type: 'text', text: `Monitor ${monitor_id} not found.` }],
+      };
+    }
+
+    const result = await checkMonitor(monitor);
+    const updated = await monitorsDb.findById(monitor_id);
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          monitor: updated,
+          alert: result.alert,
+          bestListing: result.bestListing,
+        }, null, 2),
+      }],
+    };
+  }
+);
+
+server.registerTool(
+  'delete_monitor',
+  {
+    description: 'Deactivate a price monitor. It will no longer be checked on the schedule.',
+    inputSchema: {
+      monitor_id: z.number().int().positive().describe('ID of the monitor to deactivate'),
+    },
+  },
+  async ({ monitor_id }) => {
+    const monitor = await monitorsDb.deactivate(monitor_id);
+    if (!monitor) {
+      return {
+        content: [{ type: 'text', text: `Monitor ${monitor_id} not found.` }],
+      };
+    }
+
+    return {
+      content: [{ type: 'text', text: JSON.stringify(monitor, null, 2) }],
+    };
+  }
+);
+
+server.registerTool(
+  'get_alerts',
+  {
+    description: 'Get recent price alerts across all monitors, or for a specific monitor.',
+    inputSchema: {
+      monitor_id: z.number().int().positive().optional().describe('Filter alerts to a specific monitor'),
+      limit: z.number().int().min(1).max(200).optional().describe('Max alerts to return (default 50)'),
+    },
+  },
+  async ({ monitor_id, limit }) => {
+    const alerts = monitor_id
+      ? await monitorsDb.getAlerts(monitor_id, limit || 20)
+      : await monitorsDb.recentAlerts(limit || 50);
+
+    return {
+      content: [{
+        type: 'text',
+        text: alerts.length
+          ? JSON.stringify(alerts, null, 2)
+          : 'No alerts.',
+      }],
+    };
+  }
+);
+
 // --- Start ---
 
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  logger.info('BrickHunter MCP server running on stdio');
+  logger.info({ version: VERSION, commit: COMMIT }, 'BrickHunter MCP server running on stdio');
 }
 
 main().catch((err) => {
